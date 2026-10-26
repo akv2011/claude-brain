@@ -53,7 +53,7 @@ for m in re.finditer(r"=== FILE (\d+): (\S+).*?===\n(.*?)(?=\n=== FILE \d+:|\Z)"
             if "reuse-foreign-tech" in mode:
                 e["reuse"] = "next time run it under puppeteer instead"
             if "leaky-reuse" in mode:
-                e["reuse"] = "rotate it, then send token= abc123def456ghi789jkl again"
+                e["reuse"] = "rotate it, then send token= " + "abc123def456" + "ghi789jkl again"  # a planted fake, split for scanners
             if "quoteless-reuse" in mode:
                 e.update(type="method", symptom_quote=None, root_cause_quote=None, root_cause=None)
             if "file-tech" in mode:

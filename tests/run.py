@@ -655,7 +655,7 @@ def titles_skip_fences(t):
 @test
 def secrets_never_reach_the_catalog(t):
     with open(os.path.join(t.P, "docs/shared.md"), "a") as fh:
-        fh.write("\n## Leaky config\n- Symptom: password = hunter2hunter2hunter2\n- Cause: a key pasted in a note.\n")
+        fh.write("\n## Leaky config\n- Symptom: password = " + "hunter2" * 3 + "\n- Cause: a key pasted in a note.\n")  # planted fakes, split for scanners
     t.cli("build")
     run, imp = classify(t)
     rows = catalog_rows(t)
@@ -671,7 +671,7 @@ def secrets_never_reach_the_catalog(t):
     assert t.cli("lint").returncode == 0
     path = os.path.join(t.home, "catalog/notes.jsonl")
     good = open(path).read()
-    for planted in ("token: abcdefghijklmnop1234", "key " + "ab12" * 16):
+    for planted in ("token: " + "abcdefghijklmnop" + "1234", "key " + "ab12" * 16):
         with open(path, "a") as fh:
             fh.write(json.dumps({"logical": "x", "description": planted, "entries": []}) + "\n")
         r = t.cli("lint", check=False)
