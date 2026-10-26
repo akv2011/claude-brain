@@ -1,0 +1,12 @@
+{
+  "projects_root": "~/code",
+  "memory_dir": "~/.claude/projects/-Users-you-code/memory",
+  "claude_files": ["~/.claude/CLAUDE.md", "~/.claude/skills"],
+  "exclude": ["vendor-clones", "experiments/third-party"],
+  "remote": "local",
+  "archive_dir": "/Volumes/Backup/notes-archive",
+  "notify": ["/usr/bin/osascript", "-e", "on run argv", "-e", "display notification (item 1 of argv) with title \"brain\"", "-e", "end run"],
+  "note_conventions": "~/code/docs/note-conventions.md",
+  "push_catalog": false,
+  "queries": "review/queries.jsonl"
+}

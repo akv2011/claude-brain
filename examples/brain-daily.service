@@ -1,0 +1,8 @@
+[Unit]
+Description=Claude Brain daily job (build, read changes, lint, maps)
+
+[Service]
+Type=oneshot
+# Edit the path. The job is a no-op when it ran recently, so the hourly timer is cheap.
+ExecStart=/usr/bin/python3 %h/code/claude-brain/brain.py daily --if-due 20
+TimeoutStartSec=3600
