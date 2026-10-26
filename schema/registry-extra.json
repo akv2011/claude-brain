@@ -1,0 +1,290 @@
+{
+ "_about": "Hand-kept half of the registry. brain.py registry merges it with project folders and docs/repos.md into schema/registry.json. project_aliases: extra names for a project, and the prefixes of chat session names that work on it, e.g. {\"shop\": {\"aliases\": [\"Shop Site\", \"shop.example\"], \"sessions\": [\"Shop_\"], \"source\": \"why\"}}. tech: canonical id -> the words that name it. domains: the domain ids the reader picks from. Short aliases (2 characters or fewer, or all caps) and session prefixes match case-sensitively.",
+ "project_aliases": {},
+ "tech": {
+  "cloudflare": [
+   "cloudflare",
+   "CF",
+   "WAF",
+   "cf-ray"
+  ],
+  "cloudflare-workers": [
+   "workers",
+   "worker",
+   "wrangler",
+   "cloudflare worker",
+   "cloudflare workers",
+   "workers.dev"
+  ],
+  "cloudflare-pages": [
+   "cloudflare pages",
+   "pages.dev"
+  ],
+  "cloudflare-challenge": [
+   "cf_clearance",
+   "turnstile",
+   "just a moment",
+   "cloudflare challenge",
+   "challenge page",
+   "CF challenge",
+   "interactive challenge",
+   "cf-chl",
+   "challenge-platform"
+  ],
+  "cloudflared": [
+   "cloudflared",
+   "cloudflare tunnel"
+  ],
+  "d1": [
+   "D1",
+   "cloudflare d1"
+  ],
+  "r2": [
+   "R2",
+   "cloudflare r2"
+  ],
+  "kv": [
+   "KV",
+   "workers kv"
+  ],
+  "turso": [
+   "turso",
+   "libsql"
+  ],
+  "sqlite": [
+   "sqlite",
+   "sqlite3",
+   "fts5"
+  ],
+  "postgres": [
+   "postgres",
+   "postgresql",
+   "psql"
+  ],
+  "redis": [
+   "redis"
+  ],
+  "nextjs": [
+   "next.js",
+   "nextjs",
+   "opennext",
+   "open-next",
+   "RSC",
+   "app router"
+  ],
+  "react": [
+   ".jsx",
+   ".tsx",
+   "react"
+  ],
+  "tailwind": [
+   "tailwind"
+  ],
+  "heroku": [
+   "heroku"
+  ],
+  "vercel": [
+   "vercel"
+  ],
+  "github-actions": [
+   "github actions",
+   "workflow_dispatch",
+   "gh actions",
+   "actions minutes",
+   ".github/workflows"
+  ],
+  "playwright": [
+   "playwright"
+  ],
+  "puppeteer": [
+   "puppeteer"
+  ],
+  "cdp": [
+   "CDP",
+   "chrome devtools protocol",
+   "devtools protocol"
+  ],
+  "chrome": [
+   "chrome",
+   "chromium"
+  ],
+  "curl-cffi": [
+   "curl_cffi",
+   "curl-cffi"
+  ],
+  "ddos-guard": [
+   "ddos-guard",
+   "ddos guard"
+  ],
+  "python": [
+   ".py",
+   "python",
+   "python3"
+  ],
+  "uv": [
+   "uv"
+  ],
+  "node": [
+   "node",
+   "nodejs",
+   "npm",
+   "pnpm"
+  ],
+  "bun": [
+   "bun"
+  ],
+  "hls": [
+   "hls",
+   "m3u8",
+   "hls.js"
+  ],
+  "ffmpeg": [
+   "ffmpeg",
+   "ffprobe"
+  ],
+  "yt-dlp": [
+   "yt-dlp"
+  ],
+  "mutagen": [
+   "mutagen"
+  ],
+  "tmux": [
+   "tmux"
+  ],
+  "systemd": [
+   "systemd",
+   "systemctl"
+  ],
+  "launchd": [
+   "launchd",
+   "launchctl",
+   "launchagent"
+  ],
+  "ssh": [
+   "ssh"
+  ],
+  "tailscale": [
+   "tailscale"
+  ],
+  "oracle-vm": [
+   "oracle vm",
+   "OCI"
+  ],
+  "aws": [
+   "aws",
+   "lightsail",
+   "ec2"
+  ],
+  "gcp": [
+   "gcp",
+   "gcloud"
+  ],
+  "kaggle": [
+   "kaggle"
+  ],
+  "search-console": [
+   "search console",
+   "GSC"
+  ],
+  "indexnow": [
+   "indexnow",
+   "bing webmaster"
+  ],
+  "sitemap": [
+   "sitemap",
+   "sitemaps"
+  ],
+  "sentry": [
+   "sentry"
+  ],
+  "claude-code": [
+   "claude code",
+   "claude -p",
+   "CLAUDE.md",
+   "MEMORY.md"
+  ],
+  "mcp": [
+   "MCP"
+  ],
+  "rclone": [
+   "rclone"
+  ],
+  "docker": [
+   "docker"
+  ],
+  "huggingface": [
+   "hugging face",
+   "huggingface",
+   "hf space"
+  ],
+  "gmail": [
+   "gmail"
+  ],
+  "git": [
+   "git worktree",
+   "git bundle",
+   "git push",
+   "git rebase"
+  ],
+  "github": [
+   "github",
+   "gh api"
+  ],
+  "css": [
+   "css",
+   "tailwind css",
+   ".css",
+   "flex:",
+   "@media",
+   "media query",
+   "grid-template",
+   "z-index",
+   "font preload"
+  ],
+  "javascript": [
+   "javascript",
+   ".js"
+  ],
+  "typescript": [
+   "typescript",
+   ".ts",
+   ".tsx"
+  ],
+  "bash": [
+   "bash",
+   "zsh",
+   "shell script"
+  ],
+  "fastapi": [
+   "fastapi"
+  ],
+  "vite": [
+   "vite"
+  ],
+  "wordpress": [
+   "wordpress"
+  ],
+  "simpleanalytics": [
+   "simple analytics",
+   "simpleanalytics"
+  ]
+ },
+ "domains": [
+  "crawling",
+  "data-pipeline",
+  "database",
+  "deploy",
+  "frontend",
+  "video-playback",
+  "seo",
+  "browser-automation",
+  "machine-ops",
+  "ci",
+  "monitoring",
+  "security",
+  "cost",
+  "testing",
+  "workflow",
+  "media-assets"
+ ]
+}
