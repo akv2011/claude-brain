@@ -38,7 +38,7 @@ The notes stay where they are. The brain reads them in place and never edits or 
 | Claude Code memory folder for that projects folder | One entry per memory file, with its `name` and `description` weighted high. |
 | `~/.claude/CLAUDE.md` and any files you list | As notes. |
 | Commit messages | One entry per commit, subject and body. |
-| Script header comments | The first 40 lines of scripts in `scripts/`, `bin/`, `tools/` or `crawl/` folders, or named by a note. A hit on a note shows the scripts it names and whether they still exist. |
+| Script and module headers | The first 40 lines of scripts in `scripts/`, `bin/`, `tools/` or `crawl/` folders (extensionless `#!` scripts too), or named by a note, and the header comment of each module in a `src/` folder, which often documents an interface no note describes. A hit on a note shows the scripts it names and whether they still exist. |
 | `ponytail:` comments | One entry each, `file:line`. |
 | Text deleted from notes | Deleted lines from repos active in the last 90 days, at low weight, so a finding removed with a finished task is still found. |
 

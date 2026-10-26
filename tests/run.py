@@ -274,10 +274,24 @@ def other_sources(t):
     s = t.search("albatross edge cache")
     assert s and s[0]["source"] == "script" and s[0]["logical"] == "alpha/scripts/fix_cache.py", s
     p = t.search("global lock per-key throughput")
-    assert p and p[0]["source"] == "ponytail", p
+    # src/lock.py's header is that same comment, so the module header and the ponytail entry both match
+    assert any(x["source"] == "ponytail" and x["logical"].startswith("alpha/src/lock.py") for x in p[:2]), p
     how = [h for h in t.search("purge fix_cache") if h["logical"] == "alpha/docs/howto.md"][0]
     assert {"path": "scripts/fix_cache.py", "exists": True} in how["scripts"], how
     assert {"path": "scripts/gone.py", "exists": False} in how["scripts"], how
+
+
+@test
+def code_headers_are_indexed(t):
+    write(os.path.join(t.P, "alpha/src/engine.ts"), "/**\n * The engine routes jaguar frames to the okapi relay.\n */\nexport const x = 1;\n")
+    write(os.path.join(t.P, "alpha/src/plain.ts"), "export const kinkajou = 1;\n")
+    write(os.path.join(t.P, "alpha/bin/runthing"), "#!/usr/bin/env node\n// Run the tamandua sweep across every host.\nconsole.log(1);\n")
+    t.cli("build")
+    src = t.search("--kind", "script", "jaguar okapi relay")
+    assert src and src[0]["logical"] == "alpha/src/engine.ts", "a src/ module's header comment is indexed: %s" % src
+    assert not t.search("kinkajou"), "a src/ file with no header comment is not indexed as code lines"
+    run = t.search("--kind", "script", "tamandua sweep")
+    assert run and run[0]["logical"] == "alpha/bin/runthing", "an extensionless #! script is indexed: %s" % run
 
 
 @test

@@ -30,8 +30,11 @@ text later deleted from notes. The index refreshes itself when it is over 10 min
    - `reuse (suggestion)` is the reading model's advice, written from those quotes.
 
    Done when: you have read the section you will rely on, not only the hit line.
-3. **Say what you used.** Name the note path in your reply, so the user can see which past fix you reused.
-4. **Nothing found.** Say which wordings you tried. After solving it, write the finding as its own section in a topic
+3. **Search beyond the brain too.** The brain is context, not the whole search: it holds notes, memory, commit
+   messages and script and module headers, not the code itself, and a note can be missing or out of date. Also grep
+   the code and docs (`rg -n "<words>" <repo>`), read `git log`, and check the live system before acting.
+4. **Say what you used.** Name the note path in your reply, so the user can see which past fix you reused.
+5. **Nothing found.** Say which wordings you tried. After solving it, write the finding as its own section in a topic
    doc (a dated heading with the words a search would type, then Symptom, Cause, Fix, Reuse lines), so the next
    search finds it.
 

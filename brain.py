@@ -69,7 +69,8 @@ PRUNE_PATHS = set(setting_list("exclude", "BRAIN_EXCLUDE", [])) | {
     if os.path.realpath(p).startswith(_REAL_PROJECTS + os.sep)}
 NOTE_EXT = (".md", ".mdx")
 SCRIPT_EXT = (".py", ".sh", ".ts", ".mjs", ".js", ".cjs")
-SCRIPT_DIRS = {"scripts", "bin", "tools", "crawl"}
+# src/ too: a module header often documents an interface no note describes (the bridge's /cdp endpoint, 2026-10-27)
+SCRIPT_DIRS = {"scripts", "bin", "tools", "crawl", "src"}
 SOURCE_WEIGHT = {"note": 1.0, "memory": 1.0, "claude": 1.0, "commit": 0.85, "script": 0.85,
                  "ponytail": 0.85, "removed": 0.4}
 BIG_ENTRY = 20000
@@ -578,7 +579,7 @@ def repo_removed(top, current_text):
     return removed
 
 
-def script_header(path):
+def script_header(path, code_fallback=True):
     try:
         if os.path.getsize(path) > 500_000:
             return None
@@ -603,6 +604,8 @@ def script_header(path):
                 if not s.startswith(("import ", "from ", "set -", "'use", '"use', "require(")):
                     break
     if not out:
+        if not code_fallback:
+            return None
         out = lines[i:i + 12]
     return "\n".join(out[:40]).strip()
 
@@ -671,6 +674,14 @@ def passages(text, line):
         else:
             out.append((line + i, chunk))
     return out
+
+
+def shebang(path):
+    try:
+        with open(path, "rb") as fh:
+            return fh.read(2) == b"#!"
+    except OSError:
+        return False
 
 
 class Builder:
@@ -983,7 +994,7 @@ class Builder:
         return value
 
     def code_walk(self):
-        """Top-level script files (a scripts/bin/tools/crawl folder at most one level below the repo top)."""
+        """Top-level script files (a scripts/bin/tools/crawl/src folder at most one level below the repo top)."""
         found = dict(self.scan("scripts", self.script_files))
         for (resolved,) in self.db.execute("SELECT DISTINCT resolved FROM links WHERE kind='script' AND exists_=1"):
             if (resolved + "/").startswith(PROJECTS + "/") and set(resolved.split(os.sep)) & SCRIPT_DIRS:
@@ -1004,10 +1015,11 @@ class Builder:
             rel = "" if rel == "." else rel
             dirs[:] = sorted(d for d in dirs if d not in PRUNE_NAMES
                              and (os.path.join(rel, d) if rel else d) not in PRUNE_PATHS)
+            in_script_dir = bool(set(rel.split(os.sep)) & SCRIPT_DIRS)
             for f in files:
-                if not f.endswith(SCRIPT_EXT):
-                    continue
                 path = os.path.join(root, f)
+                if not f.endswith(SCRIPT_EXT) and not (in_script_dir and "." not in f and shebang(path)):
+                    continue  # an extensionless file counts when it starts with #! (bin/cbb-fanout is node)
                 logical, repo, in_repo = self.fold(path)
                 parts = in_repo.split(os.sep)
                 if any(x in SCRIPT_DIRS for x in parts[:2]) and len(parts) <= 4:
@@ -1025,7 +1037,9 @@ class Builder:
 
     def index_scripts(self):
         for logical, path in sorted(self.code_walk().items()):
-            header = script_header(path)
+            # a src/ module counts only by its header comment: its first lines of code are noise, unlike a script's
+            in_src = "src" in logical.split("/") and not set(logical.split("/")) & (SCRIPT_DIRS - {"src"})
+            header = script_header(path, code_fallback=not in_src)
             if header is None:
                 continue
             project = self.vocab.project_for_path(logical)
@@ -2164,7 +2178,8 @@ def session_intro(cwd, vocab=None):
     out = ["Brain: every past note, memory file and commit in %s is searchable. Before debugging an error or "
            "redoing a kind of task, run `~/.claude/skills/brain/brain search \"<error text or task>\"` with two or three "
            "wordings. It lists up to 30 hits ranked by word match, not meaning: read the whole list and open every one that "
-           "looks relevant. When a command fails, a matching past fix is added here automatically."
+           "looks relevant. It is context, not the whole search: also grep the code and docs (rg), read git log and check "
+           "the live system. When a command fails, a matching past fix is added here automatically."
            % os.path.basename(root)]
     if project and os.path.exists(findings):
         out.append("Findings for %s (bugs, decisions, methods, including ones buried in session logs): %s" % (project, findings))

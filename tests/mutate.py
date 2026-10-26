@@ -95,6 +95,9 @@ MUTATIONS = {
     "passage: no compact list": ("        if i > FULL_HITS:", "        if False:"),
     "passage: hook matches best lines": ("                        best_lines=False)[1]:", "                        best_lines=True)[1]:"),
     "passage: rarity counts passages": ('"SELECT count(DISTINCT p.entry) FROM fts', '"SELECT count(p.entry) FROM fts'),
+    "code: src headers skipped": ('SCRIPT_DIRS = {"scripts", "bin", "tools", "crawl", "src"}', 'SCRIPT_DIRS = {"scripts", "bin", "tools", "crawl"}'),
+    "code: extensionless scripts skipped": ('and not (in_script_dir and "." not in f and shebang(path)):', 'and not False:'),
+    "code: src code lines indexed": ("header = script_header(path, code_fallback=not in_src)", "header = script_header(path)"),
     "no frontmatter description": ('        description = meta.get("description") or cat.get("description") or ""', '        description = ""'),
 }
 
