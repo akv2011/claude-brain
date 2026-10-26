@@ -635,12 +635,42 @@ CREATE TABLE tags(entry INT, facet TEXT, value TEXT);
 CREATE TABLE items(entry INT, item INT, type TEXT, symptom TEXT, cause TEXT, fix TEXT, reuse TEXT);
 CREATE TABLE links(doc INT, kind TEXT, target TEXT, resolved TEXT, exists_ INT);
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE passages(id INTEGER PRIMARY KEY, entry INT, line INT);
 CREATE VIRTUAL TABLE fts USING fts5(title, description, anchor, tags, body, tokenize='porter unicode61');
 CREATE INDEX entries_doc ON entries(doc);
+CREATE INDEX passages_entry ON passages(entry);
 CREATE INDEX tags_entry ON tags(entry);
 CREATE INDEX tags_value ON tags(facet, value);
 CREATE INDEX items_entry ON items(entry);
 """
+
+
+# A long section is also searched in passages: BM25 scores a match by the length of the text it sits in, so one bullet
+# inside a 15k-character task list ranked 26th to 37th for the words it answers (2026-10-26). Sections stay whole for
+# the catalog and the lossless check; only the search rows are cut.
+PASSAGE_CHARS = 2000
+LIST_ITEM_RE = re.compile(r"^(?:[-*+]|\d+[.)])\s")
+
+
+def passages(text, line):
+    """(first line, text) pieces of a section for the search index: the whole section when short, else runs of
+    paragraphs and top-level list items of up to PASSAGE_CHARS."""
+    if len(text) <= PASSAGE_CHARS:
+        return [(line, text)]
+    pieces, prev_blank = [], True
+    for i, l in enumerate(text.split("\n")):
+        if not pieces or (l.strip() and (prev_blank or LIST_ITEM_RE.match(l))):
+            pieces.append([i, []])
+        pieces[-1][1].append(l)
+        prev_blank = not l.strip()
+    out = []
+    for i, ls in pieces:
+        chunk = "\n".join(ls)
+        if out and len(out[-1][1]) + len(chunk) <= PASSAGE_CHARS:
+            out[-1] = (out[-1][0], out[-1][1] + "\n" + chunk)
+        else:
+            out.append((line + i, chunk))
+    return out
 
 
 class Builder:
@@ -825,11 +855,13 @@ class Builder:
         tags.add(("project", project))
         self.db.executemany("INSERT INTO tags VALUES(?,?,?)", [(eid, f, v) for f, v in sorted(tags)])
         tag_text = " ".join(sorted({v for _, v in tags}))
-        if cat_items:
-            body = body + "\n" + " ".join(v for x in cat_items for v in (x.get("root_cause"), x.get("reuse")) if v)
-        self.db.execute("INSERT INTO fts(rowid,title,description,anchor,tags,body) VALUES(?,?,?,?,?,?)",
-                        (eid, clean(title), clean(description), clean(" > ".join(e["heading_path"] + [e["anchor"]])),
-                         tag_text, clean(body)))
+        extra = " ".join(v for x in cat_items for v in (x.get("root_cause"), x.get("reuse")) if v)
+        base = (e["line"] or 0) + (e["text"][:len(e["text"]) - len(body)].count("\n") if e["text"].endswith(body) else 0)
+        for k, (pline, ptext) in enumerate(passages(body, base)):  # base: past frontmatter the body leaves out
+            pid = self.db.execute("INSERT INTO passages(entry,line) VALUES(?,?)", (eid, pline)).lastrowid
+            self.db.execute("INSERT INTO fts(rowid,title,description,anchor,tags,body) VALUES(?,?,?,?,?,?)",
+                            (pid, clean(title), clean(description), clean(" > ".join(e["heading_path"] + [e["anchor"]])),
+                             tag_text, clean(ptext + ("\n" + extra if extra and k == 0 else ""))))
         self.counts["entries"] = self.counts.get("entries", 0) + 1
         return eid
 
@@ -1146,7 +1178,7 @@ def fts_query(phrases):
     return " OR ".join(out)
 
 
-def search(q, project=None, kind=None, limit=5, per_doc=2, db=None, vocab=None):
+def search(q, project=None, kind=None, limit=5, per_doc=2, db=None, vocab=None, best_lines=True):
     vocab = vocab or Vocab(load_registry())
     words, phrases = query_terms(q, vocab)
     match = fts_query(phrases)
@@ -1162,13 +1194,24 @@ def search(q, project=None, kind=None, limit=5, per_doc=2, db=None, vocab=None):
         pid = pid if not pid.startswith("other:") else project.lower()
         where.append("(d.project = ? OR e.id IN (SELECT entry FROM tags WHERE value = ? AND facet IN ('project','mention-project')))")
         args += [pid, pid]
-    sql = ("SELECT e.id, bm25(fts, %s) AS score, e.weight, e.doc, e.type, d.kind FROM fts "
-           "JOIN entries e ON e.id = fts.rowid JOIN docs d ON d.id = e.doc WHERE " % ", ".join(map(str, RANK["bm25"])) +
-           " AND ".join(where) + " ORDER BY score LIMIT 300")
-    cands = db.execute(sql, args).fetchall()
+    sql = ("SELECT e.id, bm25(fts, %s) AS score, e.weight, e.doc, e.type, d.kind, p.line, fts.body, e.anchor, "
+           "e.copy_path FROM fts "
+           "JOIN passages p ON p.id = fts.rowid JOIN entries e ON e.id = p.entry JOIN docs d ON d.id = e.doc WHERE "
+           % ", ".join(map(str, RANK["bm25"])) + " AND ".join(where) + " ORDER BY score LIMIT 600")
+    cands, where_in, section, copy_paths = [], {}, {}, {}
+    for c in db.execute(sql, args).fetchall():  # best passage per section; the hit points at its line
+        if c[0] not in where_in:
+            where_in[c[0]] = (c[6], c[7])
+            cands.append(c[:6])
+            # worktree copies of one section are one hit: the main checkout's when it matched, else the best copy
+            key = (c[3], c[8])
+            if key not in section or (section[key][1] and not c[9]):
+                section[key] = (c[0], c[9])
+            if c[9]:
+                copy_paths.setdefault(key, []).append(c[9])
     ranked, doc_total = [], {}
     for eid, score, weight, doc, etype, dkind in cands:
-        text = db.execute("SELECT lower(text || ' ' || anchor) FROM entries WHERE id=?", (eid,)).fetchone()[0]
+        text = (where_in[eid][1] + " " + db.execute("SELECT anchor FROM entries WHERE id=?", (eid,)).fetchone()[0]).lower()
         title = db.execute("SELECT lower(title || ' ' || coalesce(description,'')) FROM docs WHERE id=?", (doc,)).fetchone()[0]
         hay = text + " " + title
         cover = sum(1 for w in words if re.search(r"\b" + re.escape(w[:max(4, len(w) - 2)]), hay)) / max(1, len(words))
@@ -1183,11 +1226,14 @@ def search(q, project=None, kind=None, limit=5, per_doc=2, db=None, vocab=None):
         ranked = [(s_ + RANK["doc_sum"] * (doc_total[doc] - s_), eid, doc) for s_, eid, doc in ranked]
     ranked.sort()
     out, per, seen_text = [], {}, {}
+    winner = {v[0]: k for k, v in section.items()}
     for score, eid, doc in ranked:
+        if eid not in winner:  # another worktree copy of a section that has a hit
+            continue
         if per.get(doc, 0) >= per_doc:
             continue
         ehash = db.execute("SELECT ehash FROM entries WHERE id=?", (eid,)).fetchone()[0]
-        row = hit_row(db, eid, words, score)
+        row = hit_row(db, eid, words, score, *where_in[eid], best_lines=best_lines)
         if ehash in seen_text:
             prev = seen_text[ehash]
             prev.setdefault("also_in", []).append(row["path"])
@@ -1198,6 +1244,9 @@ def search(q, project=None, kind=None, limit=5, per_doc=2, db=None, vocab=None):
                 seen_text[ehash] = row
             continue
         seen_text[ehash] = row
+        others = [x for x in copy_paths.get(winner[eid], []) if x != row["path"]]
+        if others:
+            row.setdefault("also_in", []).extend(others)
         per[doc] = per.get(doc, 0) + 1
         out.append(row)
         if len(out) >= limit:
@@ -1207,7 +1256,7 @@ def search(q, project=None, kind=None, limit=5, per_doc=2, db=None, vocab=None):
     return words, out
 
 
-def hit_row(db, eid, words, score):
+def hit_row(db, eid, words, score, pline=None, ptext=None, best_lines=True):
     r = db.execute(
         "SELECT e.anchor, e.heading_path, e.line, e.date, e.text, e.source, e.type, e.cause, e.reuse, e.corrected, "
         "e.copy_path, d.logical, d.path, d.abspath, d.project, d.title, d.description, d.sensitive, d.id, e.symptom, e.fix "
@@ -1217,13 +1266,27 @@ def hit_row(db, eid, words, score):
     if text.startswith(("---", "\ufeff---")):
         meta, end = frontmatter(text)
         text = text[end:] if end else text
-    lines = [l.strip() for l in text.splitlines() if l.strip()]
-    matched = [l for l in lines if any(re.search(r"\b" + re.escape(w[:max(4, len(w) - 2)]), l.lower()) for w in words)]
+    whole = text
+    passage = ptext is not None and len(text) > PASSAGE_CHARS
+    if passage:  # a long section: show and point at the passage that matched
+        text, line = ptext, pline
+    lines = [l.strip() for l in text.splitlines() if l.strip() and l in whole]  # not the catalog text a passage carries
+    hits_in = lambda l: sum(1 for w in words if re.search(r"\b" + re.escape(w[:max(4, len(w) - 2)]), l.lower()))
+    best = [i for i, l in enumerate(lines) if hits_in(l)]
+    if best_lines:  # the lines with the most query words, in file order; the hook keeps the first ones it was tuned on
+        best = sorted(sorted(best, key=lambda i: (-hits_in(lines[i]), i))[:3])
+    matched = [lines[i] for i in best[:3]]
     scripts = db.execute("SELECT target, exists_ FROM links WHERE doc=? AND kind='script'", (doc_id,)).fetchall()
     in_entry = [(t, x) for t, x in scripts if t in text]
-    items = [{"item": i, "type": t, "cause": c, "reuse": u} for i, t, c, u in
-             db.execute("SELECT item, type, cause, reuse FROM items WHERE entry=? ORDER BY item", (eid,))]
-    return {"items": items,"score": round(score, 3), "project": project, "source": source, "type": etype, "logical": logical,
+    items = [{"item": i, "type": t, "cause": c, "reuse": u, "symptom": sq, "fix": fq} for i, t, c, u, sq, fq in
+             db.execute("SELECT item, type, cause, reuse, symptom, fix FROM items WHERE entry=? ORDER BY item", (eid,))]
+    in_section = len(items)
+    if passage:  # only the findings whose quotes sit in this passage
+        body = qnorm(text)
+        items = [x for x in items if any(x[k] and qnorm(x[k]) in body for k in ("symptom", "fix"))]
+        symptom, cause, fix, reuse = (items[0]["symptom"], items[0]["cause"], items[0]["fix"], items[0]["reuse"]) \
+            if items else (None, None, None, None)
+    return {"items": [{k: x[k] for k in ("item", "type", "cause", "reuse")} for x in items], "in_section": in_section,"score": round(score, 3), "project": project, "source": source, "type": etype, "logical": logical,
             "path": copy_path or path, "abspath": abspath if not copy_path else os.path.join(PROJECTS, copy_path),
             "line": line, "anchor": anchor, "heading_path": hpath, "title": title, "date": date_,
             "corrected": bool(corrected), "sensitive": bool(sensitive), "cause": cause, "reuse": reuse,
@@ -1232,11 +1295,20 @@ def hit_row(db, eid, words, score):
             "scripts": [{"path": t, "exists": bool(x)} for t, x in in_entry[:5]]}
 
 
+FULL_HITS = 5
+
+
 def format_hits(q, hits):
     if not hits:
         return "No hits for %r. Try other words: the error text, the tool, or the project name." % q
     out = []
     for i, h in enumerate(hits, 1):
+        if i > FULL_HITS:  # the rest one line each: the order is word matching, so the reader judges the whole list
+            if i == FULL_HITS + 1:
+                out.append("More hits, one line each (open any that look relevant):")
+            out.append("%d. [%s] %s%s | %s | %s" % (i, h["project"], h["abspath"], (":%d" % h["line"]) if h["line"] else "",
+                                                     re.sub(r"^#+\s*", "", h["anchor"])[:70], (h["matched"] or [""])[0][:110]))
+            continue
         flags = [x for x in (h["source"] if h["source"] not in ("note", "memory") else None, h["type"],
                              "corrected" if h["corrected"] else None, "local-only" if h["sensitive"] else None) if x]
         where = h["abspath"] + (":%d" % h["line"] if h["line"] else "")
@@ -1252,6 +1324,8 @@ def format_hits(q, hits):
                                                                             it["reuse"] or "-"))
         elif h["cause"] or h["reuse"]:
             out.append("   cause: %s | reuse (suggestion): %s" % (h["cause"] or "-", h["reuse"] or "-"))
+        if h.get("in_section", 0) > max(1, len(h.get("items") or [])):
+            out.append("   (a passage of a long section with %d findings; open it for the rest)" % h["in_section"])
         elif h["description"] and h["anchor"] == "(top)":
             out.append("   " + h["description"][:200])
         for m in h["matched"]:
@@ -1259,7 +1333,7 @@ def format_hits(q, hits):
         for s in h["scripts"]:
             out.append("   script: %s (%s)" % (s["path"], "exists" if s["exists"] else "MISSING"))
         if h.get("also_in"):
-            out.append("   same text also in: " + ", ".join(h["also_in"][:3]))
+            out.append("   also in: " + ", ".join(h["also_in"][:3]))
     return "\n".join(out)
 
 
@@ -2054,9 +2128,13 @@ def error_hint(text, command="", db=None, vocab=None):
     db = db or sqlite3.connect("file:%s?mode=ro" % INDEX, uri=True)
     try:
         want = hint_words(line)
-        n = db.execute("SELECT count(*) FROM fts").fetchone()[0]
-        rare = lambda w: db.execute("SELECT count(*) FROM fts WHERE fts MATCH ?", ('"%s"' % w,)).fetchone()[0] <= max(2, 0.01 * n)
-        for h in search(line, kind="note", limit=5, per_doc=1, db=db, vocab=vocab or Vocab(load_registry()))[1]:
+        n = db.execute("SELECT count(*) FROM entries").fetchone()[0]  # rarity counts sections, not passages
+        rare = lambda w: db.execute("SELECT count(DISTINCT p.entry) FROM fts JOIN passages p ON p.id = fts.rowid "
+                                    "WHERE fts MATCH ?", ('"%s"' % w,)).fetchone()[0] <= max(2, 0.01 * n)
+        # first matching lines, not the best ones: picking the best lines raised hints on 1,000 real failures from 17 to
+        # 25, and the new ones were wrong (a gcloud reauth error got a zsh note), 2026-10-26
+        for h in search(line, kind="note", limit=5, per_doc=1, db=db, vocab=vocab or Vocab(load_registry()),
+                        best_lines=False)[1]:
             if not (h["type"] in ("bug", "lesson", "method", "decision") or h["source"] == "memory"):
                 continue
             seen = hint_words(" ".join(h["matched"] + [h["anchor"]] + [x for x in (h["symptom"], h["cause"], h["fix"]) if x]))
@@ -2085,7 +2163,8 @@ def session_intro(cwd, vocab=None):
     findings = os.path.join(VIEWS, "projects", re.sub(r"[^a-z0-9._-]+", "-", (project or "").lower()) + ".md")
     out = ["Brain: every past note, memory file and commit in %s is searchable. Before debugging an error or "
            "redoing a kind of task, run `~/.claude/skills/brain/brain search \"<error text or task>\"` with two or three "
-           "wordings and open the hit. When a command fails, a matching past fix is added here automatically."
+           "wordings. It lists up to 30 hits ranked by word match, not meaning: read the whole list and open every one that "
+           "looks relevant. When a command fails, a matching past fix is added here automatically."
            % os.path.basename(root)]
     if project and os.path.exists(findings):
         out.append("Findings for %s (bugs, decisions, methods, including ones buried in session logs): %s" % (project, findings))
@@ -2647,7 +2726,7 @@ def main(argv=None):
     s.add_argument("query", nargs="+")
     s.add_argument("--project")
     s.add_argument("--kind", choices=sorted(KIND_FILTERS))
-    s.add_argument("--limit", type=int, default=5)
+    s.add_argument("--limit", type=int, default=30)
     s.add_argument("--json", action="store_true")
     s.add_argument("--no-refresh", action="store_true")
     sub.add_parser("build", help="scan everything and rebuild index.sqlite")

@@ -88,6 +88,13 @@ MUTATIONS = {
     "brain indexes itself": ("    if os.path.realpath(p).startswith(_REAL_PROJECTS + os.sep)}", "    if False}"),
     "exclude setting ignored": ('PRUNE_PATHS = set(setting_list("exclude", "BRAIN_EXCLUDE", []))', "PRUNE_PATHS = set()"),
     "worktree folder not folded": ('        while base.lower() not in self.folders and "-" in base:', "        while False:"),
+    "passage: none": ("PASSAGE_CHARS = 2000", "PASSAGE_CHARS = 10 ** 9"),
+    "passage: line ignored": ("        text, line = ptext, pline", "        text = ptext"),
+    "passage: copies each a hit": ("        if eid not in winner:  # another worktree copy of a section that has a hit\n            continue",
+                                   "        if False:\n            continue"),
+    "passage: no compact list": ("        if i > FULL_HITS:", "        if False:"),
+    "passage: hook matches best lines": ("                        best_lines=False)[1]:", "                        best_lines=True)[1]:"),
+    "passage: rarity counts passages": ('"SELECT count(DISTINCT p.entry) FROM fts', '"SELECT count(p.entry) FROM fts'),
     "no frontmatter description": ('        description = meta.get("description") or cat.get("description") or ""', '        description = ""'),
 }
 

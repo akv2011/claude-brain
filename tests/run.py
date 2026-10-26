@@ -329,6 +329,32 @@ def aliases_and_filters(t):
 
 
 @test
+def long_sections_and_worktree_copies(t):
+    filler = "".join("- [ ] Q%d routine upkeep task number %d, nothing to see in this line at all.\n" % (i, i) for i in range(60))
+    with open(os.path.join(t.P, "docs/shared.md"), "a") as fh:
+        fh.write("\n## Lane Q tasks\n" + filler + "- [~] Q99 the quokka console belongs to the heron account, owners = heron.\n"
+                 + filler)
+    for repo, words in (("alpha", "main copy"), ("alpha-wt", "branch copy")):
+        with open(os.path.join(t.P, repo, "docs/bugs.md"), "a") as fh:
+            fh.write("\n## B4 Pangolin section\nthe pangolin queue stalls, %s.\n" % words)
+    t.cli("build")
+    lines = open(os.path.join(t.P, "docs/shared.md")).read().split("\n")
+    head = lines.index("## Lane Q tasks") + 1
+    buried = next(i for i, l in enumerate(lines, 1) if "Q99" in l)
+    h = [x for x in t.search("quokka console heron account") if x["logical"] == "docs/shared.md"][0]
+    assert head < h["line"] <= buried and any("Q99" in m for m in h["matched"]), \
+        "a hit in a long section points at the passage that matched: %s" % h
+    p = [x for x in t.search("pangolin queue stalls") if x["logical"] == "alpha/docs/bugs.md"]
+    assert len(p) == 1 and p[0]["path"] == "alpha/docs/bugs.md" and p[0].get("also_in") == ["alpha-wt/docs/bugs.md"], \
+        "worktree copies of one section are one hit, the main checkout's: %s" % p
+    many = t.search("routine upkeep task alpha replica gizmo")
+    assert len(many) >= 7, many
+    out = t.cli("search", "--no-refresh", "routine upkeep task alpha replica gizmo").stdout
+    assert "More hits, one line each" in out and [l for l in out.splitlines() if l.startswith("7. ")], out[-1500:]
+    assert not [l for l in out.split("More hits")[1].splitlines() if l.startswith("   ")], "hits past the fifth take one line"
+
+
+@test
 def symlinks(t):
     h = t.search("axolotl")
     assert h and h[0]["logical"] == "linked/docs/a.md", h
@@ -827,6 +853,36 @@ def hook_hands_sessions_past_fixes(t):
     rep = json.load(open(os.path.join(t.home, "state/daily-report.json")))
     assert rep["hook"]["local"]["errors_24h"] >= 1 and "brain broke" in rep["hook"]["local"]["last_error"], rep.get("hook")
     assert rep["hook"]["local"]["hints_24h"] >= 1, rep.get("hook")
+
+
+@test
+def hook_keeps_its_tuned_match_rules(t):
+    # The hook judges a note by its first matching lines: on 1,000 real failures, judging by the best lines added 8
+    # hints and the new ones were wrong. Here only a late line repeats the error's words, so the hook stays silent.
+    write(os.path.join(t.mem, "ibis-fleet.md"), "---\nname: ibis-fleet\ndescription: notes on the ibis fleet\n---\n\n"
+          "The ibis fleet runs nightly.\nEach ibis node keeps a cache.\nAn ibis log lands in the bucket.\n"
+          "Ask before touching an ibis box.\nOld trace: ibis fleet refreshing tokens reauthentication prompt "
+          "noninteractive execution problem current list\n")
+    # Rarity counts sections, not passages: a word found in one long note is rare however many passages hold it.
+    para = lambda k: ("The zorilla socket handshake fails at warmup when the port file is stale. " if k == 0 else
+                      "Paragraph %d still mentions the zorilla. " % k) + "Background filler sentence. " * 45 + "\n\n"
+    write(os.path.join(t.mem, "zorilla-daemon.md"), "---\nname: zorilla-daemon\ndescription: the zorilla daemon\n---\n\n"
+          + "".join(para(k) for k in range(4)))
+    for k in range(3):
+        write(os.path.join(t.mem, "socket-filler-%d.md" % k), "---\nname: socket-filler-%d\ndescription: filler\n---\n\n"
+              "a socket handshake at warmup, note %d.\n" % (k, k))
+    t.cli("build")
+    zid = t.db().execute("SELECT count(*) FROM passages p JOIN entries e ON e.id = p.entry JOIN docs d ON d.id = e.doc "
+                         "WHERE d.logical = 'memory/zorilla-daemon.md'").fetchone()[0]
+    assert zid >= 3, "the long note is searched in passages: %d" % zid
+    late = {"session_id": "s8", "cwd": os.path.join(t.P, "alpha"), "hook_event_name": "PostToolUseFailure", "tool_name": "Bash",
+            "tool_input": {"command": "ibisctl fleet list"}, "error": "Exit code 1\nERROR: (ibis.fleet.list) There was a "
+            "problem refreshing your current tokens: Reauthentication failed. cannot prompt during noninteractive execution."}
+    assert hook(t, late) is None, "a note matching only on a late line gets no hint"
+    rare = dict(late, session_id="s9", tool_input={"command": "zorillactl start"},
+                error="Exit code 1\nError: zorilla socket handshake refused during warmup")
+    got = hook(t, rare)
+    assert got and "zorilla-daemon.md" in got, "a word in one note's several passages is still rare: %s" % got
 
 
 @test

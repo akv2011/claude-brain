@@ -51,6 +51,20 @@ tuning set), and a local vector index (16 of 30 alone, 23 of 30 fused with ours,
 help: telling the session to search with two or three wordings. A session is a free query expander, and three
 wordings moved the gating set from 24 to 26 of 30.
 
+The session is also the reranker. BM25 orders by words, not meaning, so search lists 30 hits: the first 5 in detail,
+the rest one line each, and the skill tells the session to read the whole list and open every relevant hit. The right
+note is in the top 30 for 27 of 30 gating queries and 77 of 83 tuning queries, against 24 and 71 in the top 5.
+
+Long sections are searched in passages. BM25 scores a match by the length of the text it sits in, so a task list of
+15,000 characters under one heading buried its bullets: a session's four wordings for one decision ranked the right
+section 26th to 37th. Every section over 2,000 characters is also indexed as passages of paragraphs and top-level
+list items; a hit points at the passage's line and shows the findings whose quotes sit in it. Sections themselves
+stay whole, so the catalog and the lossless check do not change. Worktree copies of one section count as one hit,
+the main checkout's, with the copies listed. With passages, that decision ranked 3rd, and the tuning set's top 5 rose
+from 69 to 71 with no loss on the gating set. The hook keeps its tuned rules on top of this: it still judges a note
+by its first matching lines and counts a word's rarity by sections, because judging by the best lines added hints on
+real failures and the new ones were wrong.
+
 ### 5. Every extracted claim carries a quote, checked by code
 
 The reader returns the symptom, cause and fix as quotes from the section. Import normalizes whitespace, dashes and

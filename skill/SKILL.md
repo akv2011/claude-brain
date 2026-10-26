@@ -19,7 +19,11 @@ text later deleted from notes. The index refreshes itself when it is over 10 min
    Narrow when there are too many hits: `--project <name>`, `--kind bug|method|decision|lesson|log|commit|script|memory`,
    `--limit 10`, `--json`.
    Done when: you have run at least two wordings, or the first one returned the note you needed.
-2. **Open the hit before acting.** Each hit is a pointer (`/abs/path:line`), not the answer. Read the section.
+2. **Read the whole list, then open the relevant hits.** Search lists up to 30 hits: the first 5 in detail, the rest
+   one line each. The order is word matching, not meaning, so the answer is often below #1 (in tests the right note
+   was in the top 30 for 27 of 30 queries but in the top 5 for 24). Open every hit that looks relevant. Each hit is a
+   pointer (`/abs/path:line`), not the answer: read the section; in a long section the line points at the passage
+   that matched.
    Check its date and any `[corrected]` flag (a later line says the claim changed). A `script: <path> (MISSING)`
    line means the script moved or was deleted.
    - `cause` and `fix` lines come from quotes checked against the note.

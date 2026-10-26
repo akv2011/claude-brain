@@ -9,10 +9,12 @@ The notes stay where they are. The brain reads them in place and never edits or 
 
 ## What it does
 
-- **Search.** `brain search "<error text or task>"` ranks every section of every note (SQLite FTS5 with bm25). A hit
-  gives the project, `/path:line`, the heading path, the date, the cause and fix when known, the scripts the note
-  names and whether they still exist, and other copies of the same text. Filters: `--project`, `--kind`, `--limit`,
-  `--json`.
+- **Search.** `brain search "<error text or task>"` ranks every section of every note (SQLite FTS5 with BM25, plain
+  word search) and lists 30 hits: the first 5 in detail, the rest one line each, so the session reading them judges
+  what is relevant. A hit gives the project, `/path:line`, the heading path, the date, the cause and fix when known,
+  the scripts the note names and whether they still exist, and other copies of the same text. Long sections are also
+  searched in passages, so one bullet in a long task list still ranks and the hit points at its line. Filters:
+  `--project`, `--kind`, `--limit`, `--json`.
 - **Sessions get it without asking.** A Claude Code hook puts the matching past fix beside a failed command or a
   pasted error, and tells each session once how to search and where its project's findings are. It stays silent
   unless a strong match exists, hints each note once per session, and never blocks a session.
@@ -192,8 +194,9 @@ find itself). 30 queries gate releases; 83 more are for tuning. A hit is the exp
 
 | Method | 30 gating queries | 83 tuning queries |
 |---|---|---|
-| **Claude Brain, three wordings** (what the skill tells sessions to do) | **26** | **73** |
-| **Claude Brain, one wording** | **24** | **69** |
+| **Claude Brain, one wording, in the 30 hits a session reads** | **27** | **77** |
+| **Claude Brain, three wordings, top 5** | **26** | **73** |
+| **Claude Brain, one wording, top 5** | **24** | **71** |
 | Claude Brain fused with qmd's vectors (rank fusion) | 23 | 63 |
 | qmd 2.8.3 vector search (embeddinggemma-300M) | 16 | 42 |
 | qmd 2.8.3 keyword search | 7 | 30 |
@@ -202,9 +205,13 @@ find itself). 30 queries gate releases; 83 more are for tuning. A hit is the exp
 | Model2Vec vectors alone | | 53 to 55 |
 
 Why vectors did not help here: the answer was already in Claude Brain's top 20 for 26 of 30 and 75 of 83 queries, and
-adding qmd's candidates raised that to only 26 and 76. The misses are ordering inside the top 20, which only a
-reranker could fix, with a ceiling of 26 of 30 at the cost of a model call per search. Asking the session to reword
-its query reaches that ceiling for free. Plain ripgrep has no ranking: on the same notes, "cache purge" returned 9
+adding qmd's candidates raised that to only 26 and 76. The misses are ordering, which a reranker fixes, and the
+session reading the results is a better reranker than any model a search tool could afford to run per query. So
+search lists 30 hits and the skill tells the session to read them all, and to reword when nothing fits.
+
+Long sections: BM25 scores a match by the length of the text it sits in, so one bullet in a 15,000-character task list
+ranked 26th to 37th for four wordings of the question it answered. Indexing sections over 2,000 characters as
+passages put it 3rd and raised the tuning set's top 5 from 69 to 71, with no loss elsewhere. Plain ripgrep has no ranking: on the same notes, "cache purge" returned 9
 files in directory order, and the first was an unrelated README.
 
 ### Cost to run
@@ -222,7 +229,9 @@ files in directory order, and the first was an unrelated README.
 On 837 real failed Bash commands from session transcripts, none of them used while tuning the rules, the hook gave 8
 hints, and all 8 pointed to the note with the fix. A first draft that matched on any shared words hinted on 61 of the
 same failures, mostly wrongly (template words such as `ModuleNotFoundError` matched unrelated notes). A wrong hint
-costs every session attention, so the rules favour silence. The hook answers in 10 to 260 ms.
+costs every session attention, so the rules favour silence, and they stay fixed while search changes: when search
+began showing each note's best-matching lines, the hook kept judging by the first ones, because the best lines gave 8
+more hints on 1,000 real failures and those were wrong. The hook answers in 10 to 260 ms.
 
 ### The reading pass
 
@@ -236,9 +245,9 @@ costs every session attention, so the rules favour silence. The hook answers in 
 
 ### Tests
 
-37 integration tests run the real CLI on a fixture tree of real git repos (worktrees, ignored folders, symlink loops,
+39 integration tests run the real CLI on a fixture tree of real git repos (worktrees, ignored folders, symlink loops,
 invalid UTF-8, copied notes, a memory folder), stubbing only the `claude` binary. `tests/mutate.py` breaks the code in
-62 deliberate ways, one at a time, and each break must turn at least one test red. All 62 did in the last full run.
+68 deliberate ways, one at a time, and each break must turn at least one test red.
 
 ## Why this and not another tool
 
