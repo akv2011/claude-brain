@@ -238,7 +238,7 @@ costs every session attention, so the rules favour silence. The hook answers in 
 
 37 integration tests run the real CLI on a fixture tree of real git repos (worktrees, ignored folders, symlink loops,
 invalid UTF-8, copied notes, a memory folder), stubbing only the `claude` binary. `tests/mutate.py` breaks the code in
-62 deliberate ways, one at a time, and each break must turn at least one test red.
+62 deliberate ways, one at a time, and each break must turn at least one test red. All 62 did in the last full run.
 
 ## Why this and not another tool
 
