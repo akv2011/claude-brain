@@ -63,8 +63,10 @@ PRUNE_NAMES = {"node_modules", ".git", ".venv", "venv", "site-packages", ".next"
                "test-results", "playwright-report", "blob-report", "coverage", ".playwright-mcp", "htmlcov"}
 # Folders left out by path: third-party clones (config "exclude"), and the brain's own code and data, whose plans and
 # research would outrank the notes they describe.
+_REAL_PROJECTS = os.path.realpath(PROJECTS)  # a projects_root reached through a symlink still contains the brain
 PRUNE_PATHS = set(setting_list("exclude", "BRAIN_EXCLUDE", [])) | {
-    os.path.relpath(p, PROJECTS) for p in (HERE, BRAIN) if p.startswith(PROJECTS + os.sep)}
+    os.path.relpath(os.path.realpath(p), _REAL_PROJECTS) for p in (HERE, BRAIN)
+    if os.path.realpath(p).startswith(_REAL_PROJECTS + os.sep)}
 NOTE_EXT = (".md", ".mdx")
 SCRIPT_EXT = (".py", ".sh", ".ts", ".mjs", ".js", ".cjs")
 SCRIPT_DIRS = {"scripts", "bin", "tools", "crawl"}

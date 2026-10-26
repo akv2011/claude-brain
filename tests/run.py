@@ -207,6 +207,12 @@ def exclusions(t):
         assert bad not in logical, bad
     assert not [l for l in logical if "scripts/vendored" in l], "vendored scripts indexed"
     assert not t.search("pelican") and not t.search("quetzal") and not t.search("raccoon")
+    link = os.path.join(t.root, "projects-link")
+    os.symlink(t.P, link)
+    t.cli("build", extra_env={"BRAIN_PROJECTS": link})
+    linked = {x[0] for x in t.db().execute("SELECT logical FROM docs")}
+    assert "brain/PLAN.md" not in linked, "a projects folder reached through a symlink still leaves the brain out"
+    t.cli("build")
 
 
 @test
