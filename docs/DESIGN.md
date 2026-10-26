@@ -107,7 +107,7 @@ every session, including ones already running, at the moment it helps:
 - session start, and the first prompt of a session that was already running, get one note: how to search, and the
   path of the project's findings page.
 
-The hook never rebuilds the index (it reads the last one), takes about 10 ms, and fails open: any error prints
+The hook never rebuilds the index (it reads the last one), answers in 10 to 260 ms, and fails open: any error prints
 nothing and is logged for the daily job to report.
 
 ### 12. Findings in logs are surfaced, not moved

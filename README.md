@@ -93,7 +93,7 @@ Add to `~/.claude/settings.json`, with the absolute path to your clone:
 ```
 
 Running sessions pick it up without a restart. The hook acts only for sessions working under the projects folder,
-takes about 10 ms per failure, never rebuilds the index, and on any error prints nothing and logs to
+takes 10 to 260 ms per failure, never rebuilds the index, and on any error prints nothing and logs to
 `~/.local/state/brain-hook/errors.log` (the daily job reports those).
 
 ### Read the notes (optional)
@@ -178,17 +178,92 @@ It works on any Markdown. It works best when a finding is its own section with t
 
 Put findings in topic docs, and give a session log one line pointing to them.
 
-## Measured
+## Benchmarks
 
-On the author's notes (about 1,400 note files, 560 memory files and 5,500 commits), 2026-10:
+All numbers were measured in October 2026 on one person's working notes: about 1,400 note files across 60 repos, 560
+Claude Code memory files and 5,500 commits. The comparison tools were run on the same machine against the same notes
+and queries, except where a row says the number comes from the tool's own docs or issues.
 
-- Search: the right note in the top 5 for 24 of 30 queries mined from commit history, and 26 of 30 when a session
-  tries three wordings, which is what the skill asks for.
-- Hook: on 837 real failed commands it had not seen during tuning, it gave 8 hints, all pointing to the right note.
-- Audit: causes, quotes and reuse tips are under the 10% error bar. Technology tags are 14 to 29% wrong and are the
-  open item.
-- Tests: 37 integration tests on a fixture tree of real git repos, and 62 deliberate breakages of the code, each
-  turning at least one test red.
+### Finding the right note
+
+The query set is mined from history, so nobody wrote the queries knowing the answer: each is a commit subject, and
+the expected answer is the note that same commit changed (commits are excluded from the search, so a commit cannot
+find itself). 30 queries gate releases; 83 more are for tuning. A hit is the expected note in the top 5.
+
+| Method | 30 gating queries | 83 tuning queries |
+|---|---|---|
+| **Claude Brain, three wordings** (what the skill tells sessions to do) | **26** | **73** |
+| **Claude Brain, one wording** | **24** | **69** |
+| Claude Brain fused with qmd's vectors (rank fusion) | 23 | 63 |
+| qmd 2.8.3 vector search (embeddinggemma-300M) | 16 | 42 |
+| qmd 2.8.3 keyword search | 7 | 30 |
+| Claude Brain fused with Model2Vec static embeddings | | 64 to 69 |
+| Claude Brain with pseudo-relevance feedback | | 68 to 70 |
+| Model2Vec vectors alone | | 53 to 55 |
+
+Why vectors did not help here: the answer was already in Claude Brain's top 20 for 26 of 30 and 75 of 83 queries, and
+adding qmd's candidates raised that to only 26 and 76. The misses are ordering inside the top 20, which only a
+reranker could fix, with a ceiling of 26 of 30 at the cost of a model call per search. Asking the session to reword
+its query reaches that ceiling for free. Plain ripgrep has no ranking: on the same notes, "cache purge" returned 9
+files in directory order, and the first was an unrelated README.
+
+### Cost to run
+
+| | Claude Brain | qmd 2.8.3 |
+|---|---|---|
+| Dependencies | none (Python standard library, SQLite FTS5) | Node plus three local models, about 2.0 GB on disk (qmd README) |
+| First index | 19 s for every note, memory file and commit | about 50 min of CPU embedding, in two runs, because an embed stops at 30 min unless given `--timeout 0` |
+| Search | 25 ms median in process; 0.14 to 0.29 s for a whole CLI call | keyword search loads no model; a full query loads three models, about 4.5 GB peak per process (qmd issue 942) |
+| Memory | about 30 MB peak per search | the trial's CUDA embed was killed at a 2 GB memory cap |
+| Index on disk | 87 MB, including commits and script headers | |
+
+### The hook
+
+On 837 real failed Bash commands from session transcripts, none of them used while tuning the rules, the hook gave 8
+hints, and all 8 pointed to the note with the fix. A first draft that matched on any shared words hinted on 61 of the
+same failures, mostly wrongly (template words such as `ModuleNotFoundError` matched unrelated notes). A wrong hint
+costs every session attention, so the rules favour silence. The hook answers in 10 to 260 ms.
+
+### The reading pass
+
+- Quotes: every symptom, cause and fix is a quote checked against the note by code. In the pilot, 139 of 139 and 121
+  of 121 quotes were found in their notes; anything not found is emptied, never kept.
+- Audit by a stronger model on a fresh random sample: symptom quotes 6% wrong or unsupported, causes 8%, reuse tips 4%,
+  fix quotes 10%. Technology tags are 14 to 29% wrong and are the open item.
+- Cost: sections are cited by number instead of copied, so a 23,000-character batch costs about 5,300 output tokens;
+  a pilot that echoed text spent 41,000 on a 45,000-character batch. Reading all 1,400 notes took about 300 calls, about $25 at API list
+  price, drawn here from a Claude subscription.
+
+### Tests
+
+37 integration tests run the real CLI on a fixture tree of real git repos (worktrees, ignored folders, symlink loops,
+invalid UTF-8, copied notes, a memory folder), stubbing only the `claude` binary. `tests/mutate.py` breaks the code in
+62 deliberate ways, one at a time, and each break must turn at least one test red.
+
+## Why this and not another tool
+
+Researched in October 2026 before building, from each project's README, source and issues (stars and dates from the
+GitHub API on 2026-10-25), then measured where marked.
+
+| Tool | What it is good at | Why it did not fit |
+|---|---|---|
+| [qmd](https://github.com/tobi/qmd) | Hybrid keyword, vector and reranked search, MCP server | Measured above: lower recall on these notes, an hour of first embedding, gigabytes of models. Frontmatter is embedded as body text (issue 975). |
+| [basic-memory](https://github.com/basicmachines-co/basic-memory) | Wikilink graph over Markdown, MCP | It writes a `permalink` into the frontmatter of every note it indexes (its changelog), so pointing it at live repos edits hundreds of files. |
+| [claude-mem](https://github.com/thedotmack/claude-mem) | Captures what sessions do, progressive retrieval | It records new sessions; it does not index the notes you already have. It runs a worker service plus a Chroma vector store. |
+| [memsearch](https://github.com/zilliztech/memsearch) | Clean incremental indexing with local ONNX embeddings | No MCP server, 0.x, and its Claude Code plugin summarizes every turn with a model call in a Stop hook. |
+| [GraphRAG](https://github.com/microsoft/graphrag), [LightRAG](https://github.com/HKUDS/LightRAG) | Entity graphs over documents | A model call on every chunk at index time; GraphRAG's README says it is in maintenance mode. |
+| [Khoj](https://github.com/khoj-ai/khoj) | A self-hosted chat over your files | A chat app; its docs list 8 GB of RAM for offline use. |
+| Obsidian with Omnisearch | BM25 search inside a vault | Needs the app open, searches one vault root, and Claude Code cannot query it. |
+| An LLM-maintained wiki ([Karpathy's pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)) | Curated pages for one owner and a stable topic | It rewrites sources into pages; its implementations state about 100 to 200 pages as the fit, and users report citation drift and one wrong summary spreading. Notes written by many parallel sessions and edited daily suit an index derived from the sources, which never rewrites them. |
+| ripgrep | Exact, instant | No ranking (measured above). |
+| Claude Code memory alone | Loaded into every session | MEMORY.md is cut at 200 lines or 25 KB at load (Claude Code docs), and only the session's own project folder is read. |
+
+What Claude Brain adds that none of these do together: it indexes notes where they are without editing them, folds
+git worktree copies, splits losslessly and proves it, checks every extracted quote against the source, hands the
+fix to a session at the moment a command fails, and runs on the standard library.
+
+Limits of these numbers: one person's notes, one query set mined from that person's history, and one qmd
+configuration (default models, CPU). Your notes will score differently; `eval` measures them.
 
 ## Privacy
 
