@@ -245,9 +245,9 @@ more hints on 1,000 real failures and those were wrong. The hook answers in 10 t
 
 ### Tests
 
-39 integration tests run the real CLI on a fixture tree of real git repos (worktrees, ignored folders, symlink loops,
+40 integration tests run the real CLI on a fixture tree of real git repos (worktrees, ignored folders, symlink loops,
 invalid UTF-8, copied notes, a memory folder), stubbing only the `claude` binary. `tests/mutate.py` breaks the code in
-68 deliberate ways, one at a time, and each break must turn at least one test red.
+71 deliberate ways, one at a time, and each break must turn at least one test red. All 71 did in the last full run.
 
 ## Why this and not another tool
 
