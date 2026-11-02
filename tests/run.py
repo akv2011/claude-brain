@@ -122,6 +122,8 @@ def make_fixture(root):
     # excluded trees
     write(os.path.join(P, "vendor/repos/x/README.md"), "# third party\nexcluded quetzal\n")
     write(os.path.join(P, "brain/PLAN.md"), "# brain\nexcluded brain plan raccoon\n")
+    write(os.path.join(P, "alpha/.ship/abc123/docs/snap.md"), "# Snapshot\nwapiti snapshot copy of a doc.\n")
+    write(os.path.join(P, ".github/notes.md"), "# CI notes\nthe quoll workflow runs nightly.\n")
     # the ponytail scan walks code too, so the excluded trees need code that carries one
     write(os.path.join(P, "vendor/repos/x/lib.py"), "# ponytail: excluded quetzal shortcut\n")
     write(os.path.join(P, "brain/research/b0001.prompt"), "ponytail: raccoon from a quoted note\n")
@@ -207,6 +209,8 @@ def exclusions(t):
         assert bad not in logical, bad
     assert not [l for l in logical if "scripts/vendored" in l], "vendored scripts indexed"
     assert not t.search("pelican") and not t.search("quetzal") and not t.search("raccoon")
+    assert not t.search("wapiti"), "a dot folder (a build snapshot) is not indexed"
+    assert [x for x in t.search("quoll") if x["logical"] == ".github/notes.md"], ".github notes are kept"
     link = os.path.join(t.root, "projects-link")
     os.symlink(t.P, link)
     t.cli("build", extra_env={"BRAIN_PROJECTS": link})
@@ -450,6 +454,18 @@ def classify_round_trip(t):
     h = t.search("--kind", "bug", "replica hung")
     assert h and h[0]["cause"] == "stub cause" and h[0]["type"] == "bug", h
     assert imp["null_rate"].get("root_cause_quote", 0) == 0, imp
+
+
+@test
+def catalog_forgets_excluded_paths(t):
+    path = os.path.join(t.home, "catalog/local.jsonl")
+    with open(path, "a") as fh:
+        fh.write(json.dumps({"logical": "alpha/.ship/abc123/docs/old.md", "sensitive": True, "entries": []}) + "\n")
+    with open(os.path.join(t.P, "docs/shared.md"), "a") as fh:
+        fh.write("\n## Walrus outage\n- Symptom: \"walrus queue stuck\"\n- Cause: the walrus lease never expired.\n")
+    t.cli("build")
+    classify(t)
+    assert "alpha/.ship/" not in open(path).read(), "a row under a skipped folder leaves the catalog at the next import"
 
 
 @test

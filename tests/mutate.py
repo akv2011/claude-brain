@@ -98,6 +98,8 @@ MUTATIONS = {
     "code: src headers skipped": ('SCRIPT_DIRS = {"scripts", "bin", "tools", "crawl", "src"}', 'SCRIPT_DIRS = {"scripts", "bin", "tools", "crawl"}'),
     "code: extensionless scripts skipped": ('and not (in_script_dir and "." not in f and shebang(path)):', 'and not False:'),
     "code: src code lines indexed": ("header = script_header(path, code_fallback=not in_src)", "header = script_header(path)"),
+    "dot folders indexed": ('    return name in PRUNE_NAMES or (name.startswith(".") and name not in DOT_DIRS_KEPT)', "    return name in PRUNE_NAMES"),
+    "excluded rows kept in the catalog": ("    catalog = {k: v for k, v in catalog.items() if not excluded(k)}", "    catalog = dict(catalog)"),
     "no frontmatter description": ('        description = meta.get("description") or cat.get("description") or ""', '        description = ""'),
 }
 

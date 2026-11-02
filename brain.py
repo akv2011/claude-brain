@@ -477,7 +477,7 @@ class Corpus:
             seen.add(real)
             rel = os.path.relpath(root, PROJECTS)
             rel = "" if rel == "." else rel
-            dirs[:] = sorted(d for d in dirs if d not in PRUNE_NAMES
+            dirs[:] = sorted(d for d in dirs if not pruned_dir(d)
                              and (os.path.join(rel, d) if rel else d) not in PRUNE_PATHS)
             for f in sorted(files):
                 if f.lower().endswith(NOTE_EXT):
@@ -674,6 +674,21 @@ def passages(text, line):
         else:
             out.append((line + i, chunk))
     return out
+
+
+# Dot folders hold tool state and build copies (a gitignored .ship/<sha>/ snapshot of a repo's docs was read by the
+# model and then vanished, 188 rows, 2026-11-02); only these two hold notes.
+DOT_DIRS_KEPT = {".claude", ".github"}
+
+
+def pruned_dir(name):
+    return name in PRUNE_NAMES or (name.startswith(".") and name not in DOT_DIRS_KEPT)
+
+
+def excluded(logical):
+    """A catalog row whose note sits in a folder the walk now skips; a deleted note's row is kept, this is not."""
+    parts = logical.split(" (removed ")[0].split("/")
+    return any(pruned_dir(p) for p in parts[:-1]) or any(logical == x or logical.startswith(x + "/") for x in PRUNE_PATHS)
 
 
 def shebang(path):
@@ -1013,7 +1028,7 @@ class Builder:
             seen.add(real)
             rel = os.path.relpath(root, PROJECTS)
             rel = "" if rel == "." else rel
-            dirs[:] = sorted(d for d in dirs if d not in PRUNE_NAMES
+            dirs[:] = sorted(d for d in dirs if not pruned_dir(d)
                              and (os.path.join(rel, d) if rel else d) not in PRUNE_PATHS)
             in_script_dir = bool(set(rel.split(os.sep)) & SCRIPT_DIRS)
             for f in files:
@@ -1903,6 +1918,7 @@ def clean_entry(e, src, vocab, domains, stats):
 
 def write_catalog(catalog):
     os.makedirs(CATALOG, exist_ok=True)
+    catalog = {k: v for k, v in catalog.items() if not excluded(k)}
     for name, rows in (("notes.jsonl", [r for r in catalog.values() if not r.get("sensitive")]),
                        ("local.jsonl", [r for r in catalog.values() if r.get("sensitive")])):
         path = os.path.join(CATALOG, name)
